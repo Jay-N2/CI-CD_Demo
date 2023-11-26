@@ -1,35 +1,67 @@
-name: Production workflow
+name: Node.js CI
 
 on:
   push:
-    branches:
-      - master
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Check out Git repository
+      - uses: actions/checkout@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v1
+        with:
+          node-version: '16.x'
+      - run: npm install
+      - run: npm run build
+      - uses: actions/upload-artifact@v2
+        with:
+          name: build
+          path: build/
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v1
+        with:
+          node-version: '16.x'
+      - run: npm install
+      - uses: actions/download-artifact@v2
+        with:
+          name: build
+          path: build
+      - run: npm run test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout Repository
         uses: actions/checkout@v2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v1
         with:
-          node-version: '14.x'
+          node-version: '16.x'
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: build
+          path: build
 
-      - name: Run tests
-        run: npm test
-
-      - name: Build
-        run: npm run build
+      - name: Install Netlify CLI
+        run: npm install -g netlify-cli
 
       - name: Deploy to Netlify
-        uses: netlify/actions/cli@master
-        env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
-        with:
-          args: deploy --dir=build --prod
+        run: npx netlify deploy --dir=build --site 01a9a3ef-287b-4588-9574-0e680dbe9250 --auth nfp_XzhLHWFTKrAJM1ECrmKQ5L6uZm4XpQrg631a --prod
